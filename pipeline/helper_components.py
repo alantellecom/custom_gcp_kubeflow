@@ -7,19 +7,22 @@ def prepoc_split_dataset(root_path: str
                             ('testing_file_path', str)]):
 
   import pandas as pd
+  from sklearn.model_selection import train_test_split
   from sklearn import preprocessing
   import os
 
   os.system('curl -o iris.txt  https://archive.ics.uci.edu/ml/machine-learning-databases/iris/iris.data')
     
+  os.system('gsutil cp  iris.txt  {}'.format(root_path))
+    
     
   columns = ['sepal_length','sepal_width','petal_length','petal_width','class']
 
-  dfIris = pd.read_csv('iris.data', names=columns)
+  dfIris = pd.read_csv('{}/iris.txt'.format(root_path), names=columns)
   le = preprocessing.LabelEncoder()
   dfIris['classEncoder'] = le.fit_transform(dfIris['class'])
     
-  X_train, X_val_test, y_train, y_val_test = train_test_split(dfIris.drop(['classEncoder','class'], axis=1),     dfIris['classEncoder'], test_size=0.2)
+  X_train, X_val_test, y_train, y_val_test = train_test_split(dfIris.drop(['classEncoder','class'], axis=1), dfIris['classEncoder'], test_size=0.2)
 
   X_val, X_test, y_val, y_test = train_test_split(X_val_test,y_val_test, test_size=0.5)
     
@@ -27,14 +30,18 @@ def prepoc_split_dataset(root_path: str
   df_val = pd.concat([X_val,y_val],axis=1)
   df_test = pd.concat([X_test,y_test],axis=1)
   
-  training_file_path = '{}/train.txt'.format(training_file_path)
-  validation_file_path = '{}/validation.txt'.format(validation_file_path
-  testing_file_path  = '{}/test.txt'.format(testing_file_path)                                                
+  df_train.to_csv('train.txt', index=False)
+  df_val.to_csv('validation.txt', index=False)
+  df_test.to_csv('test.txt' , index=False)
+
+  os.system('gsutil cp  train.txt  {}'.format(root_path))
+  os.system('gsutil cp  validation.txt  {}'.format(root_path))
+  os.system('gsutil cp  test.txt  {}'.format(root_path))
   
-  df_train.to_csv(training_file_path, index=False)
-  df_val.to_csv(validation_file_path, index=False)
-  df_test.to_csv(testing_file_path , index=False)
-  
+  training_file_path = '{}/train.txt'.format(root_path)
+  validation_file_path = '{}/validation.txt'.format(root_path)
+  testing_file_path = '{}/test.txt'.format(root_path)
+    
   return (training_file_path,validation_file_path,testing_file_path)
 
 def retrieve_best_run(
@@ -70,7 +77,7 @@ def retrieve_best_run(
 
 
 def evaluate_model(
-    dataset_path: str, model_path: str, metric_name: str
+    testing_file_path: str, model_path: str, metric_name: str
 ) -> NamedTuple('Outputs', [('metric_name', str), ('metric_value', float),
                             ('mlpipeline_metrics', 'Metrics')]):
   """Evaluates a trained sklearn model."""
@@ -82,11 +89,12 @@ def evaluate_model(
   import sys
 
   from sklearn.metrics import accuracy_score, recall_score
+  
 
-  df_test = pd.read_csv(dataset_path)
+  df_test = pd.read_csv(testing_file_path)
 
-  X_test = df_test.drop('Cover_Type', axis=1)
-  y_test = df_test['Cover_Type']
+  X_test = df_test.drop('classEncoder', axis=1)
+  y_test = df_test['classEncoder']
 
   # Copy the model from GCS
   model_filename = 'model.pkl'
