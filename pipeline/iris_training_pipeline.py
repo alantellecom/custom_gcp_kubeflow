@@ -5,6 +5,7 @@ import os
 
 from helper_components import evaluate_model
 from helper_components import retrieve_best_run
+from helper_components import custom_deploy
 from helper_components import prepoc_split_dataset
 from jinja2 import Template
 import kfp
@@ -42,13 +43,13 @@ HYPERTUNE_SETTINGS = """
             {
                 "parameterName": "max_iter",
                 "type": "DISCRETE",
-                "discreteValues": [80, 100]
+                "discreteValues": [90, 100]
             },
             {
                 "parameterName": "alpha",
                 "type": "DOUBLE",
                 "minValue": 0.001,
-                "maxValue": 0.009,
+                "maxValue": 0.004,
                 "scaleType": "UNIT_LINEAR_SCALE"
             }
         ]
@@ -66,6 +67,7 @@ mlengine_deploy_op = component_store.load_component('ml_engine/deploy')
 retrieve_best_run_op = func_to_container_op(
     retrieve_best_run, base_image=BASE_IMAGE)
 evaluate_model_op = func_to_container_op(evaluate_model, base_image=BASE_IMAGE)
+custom_deploy_op = func_to_container_op(custom_deploy, base_image=BASE_IMAGE)
 
 
 @kfp.dsl.pipeline(
@@ -137,14 +139,11 @@ def iris_train(project_id,
 
     # Deploy the model if the primary metric is better than threshold
     with kfp.dsl.Condition(eval_model.outputs['metric_value'] > evaluation_metric_threshold):
-        deploy_model = mlengine_deploy_op(
-        model_uri=train_model.outputs['job_dir'],
+        custom_deploy_op(
+        model_uri=str(train_model.outputs['job_dir']),
         project_id=project_id,
         model_id=model_id,
-        version_id=version_id,
-        runtime_version=RUNTIME_VERSION,
-        python_version=PYTHON_VERSION,
-        replace_existing_version=replace_existing_version)
+        version_id=version_id)
 
     # Configure the pipeline to run using the service account defined
     # in the user-gcp-sa k8s secret

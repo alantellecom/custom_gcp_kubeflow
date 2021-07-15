@@ -125,3 +125,21 @@ def evaluate_model(
   }
 
   return (metric_name, metric_value, json.dumps(metrics))
+
+def custom_deploy(model_uri: str, project_id: str,model_id: str,version_id: str):
+  import subprocess
+  import sys
+  
+  model_filename = 'model.pkl'
+  gcs_model_filepath = '{}/{}'.format(model_uri, model_filename)
+  print(gcs_model_filepath)
+  subprocess.check_call(['git', 'pull', 'https://github.com/alantellecom/custom_gcp_kubeflow.git'],
+                        stderr=sys.stdout)
+  subprocess.check_call(['gsutil', 'cp', gcs_model_filepath, 'deployApi/{}'.format(model_filename)],
+                        stderr=sys.stdout)
+  subprocess.check_call(['gcloud', 'builds', 'submit', '--config', 'deployApi/cloudbuild.yaml',
+            '--substitutions', '_PROJECT_ID={},_API_NAME={},_VERSION={}'.format(project_id,model_id,version_id)] ,stderr=sys.stdout)
+
+                        
+  subprocess.check_call(['gsutil', 'run', 'deploy', model_id, '--image gcr.io/{}/{}:{}'.format(project_id,model_id,version_id)],
+                        stderr=sys.stdout)
