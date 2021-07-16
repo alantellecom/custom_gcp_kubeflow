@@ -139,5 +139,7 @@ def build_image(model_uri: str, project_id: str,model_id: str,version_id: str):
 
 def custom_deploy(region: str, project_id: str,model_id: str,version_id: str):
   import os
-
-  os.system('gcloud run deploy {} --region {} --image gcr.io/{}/{}:{}'.format(model_id, region, project_id,model_id,version_id))
+  member = "allUsers"
+  role = "roles/run.invoker"
+  os.system('gcloud run deploy {} --region {} --image gcr.io/{}/{}:{} --allow-unauthenticated'.format(model_id, region, project_id,model_id,version_id))
+  os.system('gcloud run services add-iam-policy-binding {} --member={} --role={}'.format(model_id,member,role))
