@@ -1,4 +1,5 @@
 from fastapi import FastAPI, HTTPException
+import pickle5 as pickle
 import schemas
 
 app = FastAPI(title="Iris Prediction API",
