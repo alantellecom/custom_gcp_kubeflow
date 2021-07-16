@@ -5,6 +5,7 @@ import os
 
 from helper_components import evaluate_model
 from helper_components import retrieve_best_run
+from helper_components import build_image
 from helper_components import custom_deploy
 from helper_components import prepoc_split_dataset
 from jinja2 import Template
@@ -67,6 +68,7 @@ mlengine_deploy_op = component_store.load_component('ml_engine/deploy')
 retrieve_best_run_op = func_to_container_op(
     retrieve_best_run, base_image=BASE_IMAGE)
 evaluate_model_op = func_to_container_op(evaluate_model, base_image=BASE_IMAGE)
+build_image_op = func_to_container_op(build_image, base_image=BASE_IMAGE)
 custom_deploy_op = func_to_container_op(custom_deploy, base_image=BASE_IMAGE)
 
 
@@ -139,11 +141,17 @@ def iris_train(project_id,
 
     # Deploy the model if the primary metric is better than threshold
     with kfp.dsl.Condition(eval_model.outputs['metric_value'] > evaluation_metric_threshold):
-        custom_deploy_op(
+        build_image= build_image_op(
         model_uri=str(train_model.outputs['job_dir']),
         project_id=project_id,
         model_id=model_id,
         version_id=version_id)
+        
+        custom_deploy_op(
+            region=region,
+            project_id=project_id,
+            model_id=model_id,
+            version_id=version_id).after(build_image).set_display_name('Deploy Model')
 
     # Configure the pipeline to run using the service account defined
     # in the user-gcp-sa k8s secret

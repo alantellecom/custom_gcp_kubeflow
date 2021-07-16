@@ -2,7 +2,7 @@ apiVersion: argoproj.io/v1alpha1
 kind: Workflow
 metadata:
   generateName: iris-classifier-training-
-  annotations: {pipelines.kubeflow.org/kfp_sdk_version: 1.6.4, pipelines.kubeflow.org/pipeline_compilation_time: '2021-07-15T21:37:34.452798',
+  annotations: {pipelines.kubeflow.org/kfp_sdk_version: 1.6.4, pipelines.kubeflow.org/pipeline_compilation_time: '2021-07-16T02:40:49.716407',
     pipelines.kubeflow.org/pipeline_spec: '{"description": "The pipeline training
       and deploying the Iris classifierpipeline_yaml", "inputs": [{"name": "project_id"},
       {"name": "region"}, {"name": "gcs_root"}, {"name": "dataset_id"}, {"name": "evaluation_metric_name"},
@@ -21,25 +21,7 @@ metadata:
 spec:
   entrypoint: iris-classifier-training
   templates:
-  - name: condition-1
-    inputs:
-      parameters:
-      - {name: model_id}
-      - {name: project_id}
-      - {name: submitting-a-cloud-ml-training-job-as-a-pipeline-step-2-job_dir}
-      - {name: version_id}
-    dag:
-      tasks:
-      - name: custom-deploy
-        template: custom-deploy
-        arguments:
-          parameters:
-          - {name: model_id, value: '{{inputs.parameters.model_id}}'}
-          - {name: project_id, value: '{{inputs.parameters.project_id}}'}
-          - {name: submitting-a-cloud-ml-training-job-as-a-pipeline-step-2-job_dir,
-            value: '{{inputs.parameters.submitting-a-cloud-ml-training-job-as-a-pipeline-step-2-job_dir}}'}
-          - {name: version_id, value: '{{inputs.parameters.version_id}}'}
-  - name: custom-deploy
+  - name: build-image
     container:
       args: [--model-uri, '{{inputs.parameters.submitting-a-cloud-ml-training-job-as-a-pipeline-step-2-job_dir}}',
         --project-id, '{{inputs.parameters.project_id}}', --model-id, '{{inputs.parameters.model_id}}',
@@ -52,30 +34,25 @@ spec:
         printf "%s" "$0" > "$program_path"
         python3 -u "$program_path" "$@"
       - |
-        def custom_deploy(model_uri, project_id,model_id,version_id):
-          import subprocess
-          import sys
+        def build_image(model_uri, project_id,model_id,version_id):
+          import os
 
           model_filename = 'model.pkl'
           gcs_model_filepath = '{}/{}'.format(model_uri, model_filename)
-          print(gcs_model_filepath)
-          subprocess.check_call(['gsutil', 'cp', gcs_model_filepath, 'deployApi/{}'.format(model_filename)],
-                                stderr=sys.stdout)
-          subprocess.check_call(['gcloud', 'builds', 'submit', '--config', 'deployApi/cloudbuild.yaml',
-                    '--substitutions', '_PROJECT_ID={},_API_NAME={},_VERSION={}'.format(project_id,model_id,version_id)] ,stderr=sys.stdout)
-
-          subprocess.check_call(['gsutil', 'run', 'deploy', model_id, '--image gcr.io/{}/{}:{}'.format(project_id,model_id,version_id)],
-                                stderr=sys.stdout)
+          os.system('git clone https://github.com/alantellecom/custom_gcp_kubeflow.git')
+          os.system('gsutil cp {} custom_gcp_kubeflow/deployApi/{}'.format(gcs_model_filepath,model_filename))
+          os.system('ls custom_gcp_kubeflow/deployApi/')
+          os.system('gcloud builds submit --tag gcr.io/{}/{}:{} custom_gcp_kubeflow/deployApi/'.format(project_id,model_id,version_id))
 
         import argparse
-        _parser = argparse.ArgumentParser(prog='Custom deploy', description='')
+        _parser = argparse.ArgumentParser(prog='Build image', description='')
         _parser.add_argument("--model-uri", dest="model_uri", type=str, required=True, default=argparse.SUPPRESS)
         _parser.add_argument("--project-id", dest="project_id", type=str, required=True, default=argparse.SUPPRESS)
         _parser.add_argument("--model-id", dest="model_id", type=str, required=True, default=argparse.SUPPRESS)
         _parser.add_argument("--version-id", dest="version_id", type=str, required=True, default=argparse.SUPPRESS)
         _parsed_args = vars(_parser.parse_args())
 
-        _outputs = custom_deploy(**_parsed_args)
+        _outputs = build_image(**_parsed_args)
       image: gcr.io/robotic-tide-284315/base_image:latest
     inputs:
       parameters:
@@ -90,26 +67,107 @@ spec:
           "project_id"}, "--model-id", {"inputValue": "model_id"}, "--version-id",
           {"inputValue": "version_id"}], "command": ["sh", "-ec", "program_path=$(mktemp)\nprintf
           \"%s\" \"$0\" > \"$program_path\"\npython3 -u \"$program_path\" \"$@\"\n",
-          "def custom_deploy(model_uri, project_id,model_id,version_id):\n  import
-          subprocess\n  import sys\n\n  model_filename = ''model.pkl''\n  gcs_model_filepath
-          = ''{}/{}''.format(model_uri, model_filename)\n  print(gcs_model_filepath)\n  subprocess.check_call([''gsutil'',
-          ''cp'', gcs_model_filepath, ''deployApi/{}''.format(model_filename)],\n                        stderr=sys.stdout)\n  subprocess.check_call([''gcloud'',
-          ''builds'', ''submit'', ''--config'', ''deployApi/cloudbuild.yaml'',\n            ''--substitutions'',
-          ''_PROJECT_ID={},_API_NAME={},_VERSION={}''.format(project_id,model_id,version_id)]
-          ,stderr=sys.stdout)\n\n  subprocess.check_call([''gsutil'', ''run'', ''deploy'',
-          model_id, ''--image gcr.io/{}/{}:{}''.format(project_id,model_id,version_id)],\n                        stderr=sys.stdout)\n\nimport
-          argparse\n_parser = argparse.ArgumentParser(prog=''Custom deploy'', description='''')\n_parser.add_argument(\"--model-uri\",
+          "def build_image(model_uri, project_id,model_id,version_id):\n  import os\n\n  model_filename
+          = ''model.pkl''\n  gcs_model_filepath = ''{}/{}''.format(model_uri, model_filename)\n  os.system(''git
+          clone https://github.com/alantellecom/custom_gcp_kubeflow.git'')\n  os.system(''gsutil
+          cp {} custom_gcp_kubeflow/deployApi/{}''.format(gcs_model_filepath,model_filename))\n  os.system(''ls
+          custom_gcp_kubeflow/deployApi/'')\n  os.system(''gcloud builds submit --tag
+          gcr.io/{}/{}:{} custom_gcp_kubeflow/deployApi/''.format(project_id,model_id,version_id))\n\nimport
+          argparse\n_parser = argparse.ArgumentParser(prog=''Build image'', description='''')\n_parser.add_argument(\"--model-uri\",
           dest=\"model_uri\", type=str, required=True, default=argparse.SUPPRESS)\n_parser.add_argument(\"--project-id\",
+          dest=\"project_id\", type=str, required=True, default=argparse.SUPPRESS)\n_parser.add_argument(\"--model-id\",
+          dest=\"model_id\", type=str, required=True, default=argparse.SUPPRESS)\n_parser.add_argument(\"--version-id\",
+          dest=\"version_id\", type=str, required=True, default=argparse.SUPPRESS)\n_parsed_args
+          = vars(_parser.parse_args())\n\n_outputs = build_image(**_parsed_args)\n"],
+          "image": "gcr.io/robotic-tide-284315/base_image:latest"}}, "inputs": [{"name":
+          "model_uri", "type": "String"}, {"name": "project_id", "type": "String"},
+          {"name": "model_id", "type": "String"}, {"name": "version_id", "type": "String"}],
+          "name": "Build image"}', pipelines.kubeflow.org/component_ref: '{}', pipelines.kubeflow.org/arguments.parameters: '{"model_id":
+          "{{inputs.parameters.model_id}}", "model_uri": "{{inputs.parameters.submitting-a-cloud-ml-training-job-as-a-pipeline-step-2-job_dir}}",
+          "project_id": "{{inputs.parameters.project_id}}", "version_id": "{{inputs.parameters.version_id}}"}'}
+  - name: condition-1
+    inputs:
+      parameters:
+      - {name: model_id}
+      - {name: project_id}
+      - {name: region}
+      - {name: submitting-a-cloud-ml-training-job-as-a-pipeline-step-2-job_dir}
+      - {name: version_id}
+    dag:
+      tasks:
+      - name: build-image
+        template: build-image
+        arguments:
+          parameters:
+          - {name: model_id, value: '{{inputs.parameters.model_id}}'}
+          - {name: project_id, value: '{{inputs.parameters.project_id}}'}
+          - {name: submitting-a-cloud-ml-training-job-as-a-pipeline-step-2-job_dir,
+            value: '{{inputs.parameters.submitting-a-cloud-ml-training-job-as-a-pipeline-step-2-job_dir}}'}
+          - {name: version_id, value: '{{inputs.parameters.version_id}}'}
+      - name: custom-deploy
+        template: custom-deploy
+        dependencies: [build-image]
+        arguments:
+          parameters:
+          - {name: model_id, value: '{{inputs.parameters.model_id}}'}
+          - {name: project_id, value: '{{inputs.parameters.project_id}}'}
+          - {name: region, value: '{{inputs.parameters.region}}'}
+          - {name: version_id, value: '{{inputs.parameters.version_id}}'}
+  - name: custom-deploy
+    container:
+      args: [--region, '{{inputs.parameters.region}}', --project-id, '{{inputs.parameters.project_id}}',
+        --model-id, '{{inputs.parameters.model_id}}', --version-id, '{{inputs.parameters.version_id}}']
+      command:
+      - sh
+      - -ec
+      - |
+        program_path=$(mktemp)
+        printf "%s" "$0" > "$program_path"
+        python3 -u "$program_path" "$@"
+      - |
+        def custom_deploy(region, project_id,model_id,version_id):
+          import os
+
+          os.system('gcloud run deploy {} --region {} --image gcr.io/{}/{}:{}'.format(model_id, region, project_id,model_id,version_id))
+
+        import argparse
+        _parser = argparse.ArgumentParser(prog='Custom deploy', description='')
+        _parser.add_argument("--region", dest="region", type=str, required=True, default=argparse.SUPPRESS)
+        _parser.add_argument("--project-id", dest="project_id", type=str, required=True, default=argparse.SUPPRESS)
+        _parser.add_argument("--model-id", dest="model_id", type=str, required=True, default=argparse.SUPPRESS)
+        _parser.add_argument("--version-id", dest="version_id", type=str, required=True, default=argparse.SUPPRESS)
+        _parsed_args = vars(_parser.parse_args())
+
+        _outputs = custom_deploy(**_parsed_args)
+      image: gcr.io/robotic-tide-284315/base_image:latest
+    inputs:
+      parameters:
+      - {name: model_id}
+      - {name: project_id}
+      - {name: region}
+      - {name: version_id}
+    metadata:
+      annotations: {pipelines.kubeflow.org/task_display_name: Deploy Model, pipelines.kubeflow.org/component_spec: '{"implementation":
+          {"container": {"args": ["--region", {"inputValue": "region"}, "--project-id",
+          {"inputValue": "project_id"}, "--model-id", {"inputValue": "model_id"},
+          "--version-id", {"inputValue": "version_id"}], "command": ["sh", "-ec",
+          "program_path=$(mktemp)\nprintf \"%s\" \"$0\" > \"$program_path\"\npython3
+          -u \"$program_path\" \"$@\"\n", "def custom_deploy(region, project_id,model_id,version_id):\n  import
+          os\n\n  os.system(''gcloud run deploy {} --region {} --image gcr.io/{}/{}:{}''.format(model_id,
+          region, project_id,model_id,version_id))\n\nimport argparse\n_parser = argparse.ArgumentParser(prog=''Custom
+          deploy'', description='''')\n_parser.add_argument(\"--region\", dest=\"region\",
+          type=str, required=True, default=argparse.SUPPRESS)\n_parser.add_argument(\"--project-id\",
           dest=\"project_id\", type=str, required=True, default=argparse.SUPPRESS)\n_parser.add_argument(\"--model-id\",
           dest=\"model_id\", type=str, required=True, default=argparse.SUPPRESS)\n_parser.add_argument(\"--version-id\",
           dest=\"version_id\", type=str, required=True, default=argparse.SUPPRESS)\n_parsed_args
           = vars(_parser.parse_args())\n\n_outputs = custom_deploy(**_parsed_args)\n"],
           "image": "gcr.io/robotic-tide-284315/base_image:latest"}}, "inputs": [{"name":
-          "model_uri", "type": "String"}, {"name": "project_id", "type": "String"},
-          {"name": "model_id", "type": "String"}, {"name": "version_id", "type": "String"}],
+          "region", "type": "String"}, {"name": "project_id", "type": "String"}, {"name":
+          "model_id", "type": "String"}, {"name": "version_id", "type": "String"}],
           "name": "Custom deploy"}', pipelines.kubeflow.org/component_ref: '{}', pipelines.kubeflow.org/arguments.parameters: '{"model_id":
-          "{{inputs.parameters.model_id}}", "model_uri": "{{inputs.parameters.submitting-a-cloud-ml-training-job-as-a-pipeline-step-2-job_dir}}",
-          "project_id": "{{inputs.parameters.project_id}}", "version_id": "{{inputs.parameters.version_id}}"}'}
+          "{{inputs.parameters.model_id}}", "project_id": "{{inputs.parameters.project_id}}",
+          "region": "{{inputs.parameters.region}}", "version_id": "{{inputs.parameters.version_id}}"}'}
+      labels: {pipelines.kubeflow.org/kfp_sdk_version: 1.6.4, pipelines.kubeflow.org/pipeline-sdk-type: kfp}
   - name: evaluate-model
     container:
       args: [--testing-file-path, '{{inputs.parameters.prepoc-split-dataset-testing_file_path}}',
@@ -294,6 +352,7 @@ spec:
           parameters:
           - {name: model_id, value: '{{inputs.parameters.model_id}}'}
           - {name: project_id, value: '{{inputs.parameters.project_id}}'}
+          - {name: region, value: '{{inputs.parameters.region}}'}
           - {name: submitting-a-cloud-ml-training-job-as-a-pipeline-step-2-job_dir,
             value: '{{tasks.submitting-a-cloud-ml-training-job-as-a-pipeline-step-2.outputs.parameters.submitting-a-cloud-ml-training-job-as-a-pipeline-step-2-job_dir}}'}
           - {name: version_id, value: '{{inputs.parameters.version_id}}'}
